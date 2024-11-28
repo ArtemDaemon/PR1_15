@@ -123,13 +123,17 @@ main proc
     ; EBX = XY + 1
     inc ebx 
 
-    ; ================================================ Убрать!!!
-    xor esi, esi
+    ; EAX.EBX = (X - Y)/(XY + 1)
+    push edi
+    push esi
+    call divideIntNumbers
+    mov eax, edi
+    mov ebx, esi
+    pop esi
+    pop edi
 
     ; === Конвертация результата в строку ===
     push edi
-    mov eax, ebx
-    mov ebx, 0
     lea edi, resultBuffer               ; Привязываем буфер для результата
     call floatToString                  ; Вызываем процедуру для конвертации результата в строку
     pop edi
@@ -319,5 +323,51 @@ performSubtract:
     ret
 
 subtractIntNumbers ENDP
+
+divideIntNumbers PROC
+    ; === Процедура для деления одного целого числа на друго с получением десятичного числа
+    ; Вход:
+    ;   EAX = Делимое
+    ;   EBX = Делитель
+    ; Выход:
+    ;   EDI = Целая часть
+    ;   ESI = Десятичная часть (до 4 знаков после запятой)
+    ; Используется:
+    ;   EDX = Для вренного хранения остатка от деления
+    ;   ECX = Счетчик итераций
+
+    xor esi, esi                ; Инициализировать десятичную часть
+    ; Выполнить целочисленное деление
+    xor edx, edx                ; Очистить остаток (EDX)
+    div ebx                     ; Деление EAX / EBX (целая часть в EAX, остаток в EDX)
+
+    mov edi, eax                ; Сохранить целую часть
+
+    ; Проверить, есть ли остаток
+    test edx, edx               ; Проверить остаток
+    jz done                     ; Если остатка нет, завершить
+    mov eax, edx                ; Сохранить остаток
+
+    ; Обработка остатка
+    mov ecx, 4                  ; Максимальное количество знаков после запятой             
+fractionLoop:
+    imul eax, 10                ; Умножить остаток на 10
+    xor edx, edx                ; Очистить регистр остатка
+    div ebx                     ; Выполнить деление (EAX / EBX)
+
+    ; Добавить текущий разряд в десятичную часть
+    imul esi, 10                ; Увеличить разрядность
+    add esi, eax                ; Добавить новый разряд
+
+    ; Проверить новый остаток
+    test edx, edx               ; Если остаток стал нулевым
+    jz done                     ; Прекратить обработку
+
+    mov eax, edx                ; Новый остаток
+    loop fractionLoop           ; Повторить цикл
+
+done:
+    ret
+divideIntNumbers ENDP
 
 end main
