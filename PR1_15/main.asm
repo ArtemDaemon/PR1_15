@@ -115,8 +115,17 @@ main proc
     mov ebx, yValue
     call subtractIntNumbers
 
+    ; EBX = XY
+    mov ebx, xValue
+    mov ecx, yValue
+    imul ebx, ecx
+
+    ; ================================================ Убрать!!!
+    xor esi, esi
+
     ; === Конвертация результата в строку ===
     push edi
+    mov eax, ebx
     mov ebx, 0
     lea edi, resultBuffer               ; Привязываем буфер для результата
     call floatToString                  ; Вызываем процедуру для конвертации результата в строку
@@ -234,9 +243,9 @@ floatToString PROC
     inc edi                         ; Сдвинуть указатель буфера
 
 positiveNumber:
-    xor edx, edx                      ; Очистить остаток
     mov ebx, 10                       ; Делитель для десятичной системы
 convertIntegerLoop:
+    xor edx, edx                      ; Очистить остаток
     div ebx                           ; Деление EAX на 10 (EAX = частное, EDX = остаток)
     add dl, '0'                       ; Преобразовать остаток в ASCII
     push edx                          ; Сохранить ASCII-символ в стеке
@@ -247,7 +256,7 @@ convertIntegerLoop:
 ; Запись целой части в буфер
 writeIntegerChars:
     pop ebx                           ; Извлечь символ из стека
-    mov byte ptr [edi], dl            ; Записать символ в буфер
+    mov byte ptr [edi], bl            ; Записать символ в буфер
     inc edi                           ; Сдвинуть указатель
     loop writeIntegerChars            ; Повторить для всех символов
 
