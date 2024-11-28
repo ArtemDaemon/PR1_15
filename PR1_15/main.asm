@@ -120,6 +120,9 @@ main proc
     mov ecx, yValue
     imul ebx, ecx
 
+    ; EBX = XY + 1
+    inc ebx 
+
     ; ================================================ Убрать!!!
     xor esi, esi
 
