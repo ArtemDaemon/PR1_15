@@ -14,7 +14,7 @@ STD_INPUT_HANDLE equ -10
 
 .data
 promptX db 'Enter a value for X: ', 0                       ; Сообщение для ввода X
-promptY db 'Enter a value for Y: ', 0            ; Сообщение для ввода Y
+promptY db 'Enter a value for Y: ', 0                       ; Сообщение для ввода Y
 inputBufferX db 16 dup(0)                                   ; Буфер для значения X
 inputBufferY db 16 dup(0)                                   ; Буфер для значения Y
 bytesReadX dd 0                                             ; Кол-во прочитанных байт X
@@ -22,10 +22,10 @@ bytesReadY dd 0                                             ; Кол-во про
 inputLength dd 16                                           ; Длина буфера входа
 resultBuffer db 16 dup(0)                                   ; Буфер для вывода результата
 resultBytes dd 0                                            ; Кол-во байт, записанных в буфер результата
-errorMessage db 'Error: Non-numeric input or Y is zero.', 0 ; Сообщение об ошибке
+errorMessage db 'Error: Non-numeric input.', 0              ; Сообщение об ошибке
 xValue dd 0                                                 ; Хранимое значение X
 yValue dd 0                                                 ; Хранимое значение Y
-resultMessage db 'The result of the (X-Y)/(XY+1): ', 0 ; Сообщение о результате
+resultMessage db 'The result of the (X-Y)/(XY+1): ', 0      ; Сообщение о результате
 bytesResultMessage dd 0                                     ; Кол-во прочитанных байт в сообщении о результате
 
 .code
@@ -124,9 +124,11 @@ main proc
     inc ebx 
 
     ; EAX.EBX = (X - Y)/(XY + 1)
+    ; ECX - число нулей в начале дробной части
     push edi
     push esi
     call divideIntNumbers
+    mov ecx, eax
     mov eax, edi
     mov ebx, esi
     pop esi
@@ -233,6 +235,7 @@ floatToString PROC
     ; Вход:
     ;   EAX = Целая часть
     ;   EBX = Дробная часть
+    ;   ECX = Число нулей в начале дробной части
     ;   ESI = Флаг отрицательного числа (0/1)
     ;   EDI = Ссылка на буфер для строки
     ; Используется:
@@ -240,6 +243,7 @@ floatToString PROC
     ;   EDX = Хранение остатка
 
     push ebx                          ; Сохранить дробную часть
+    push ecx
 
     xor ecx, ecx                      ; Счётчик символов
 
@@ -268,6 +272,7 @@ writeIntegerChars:
     loop writeIntegerChars            ; Повторить для всех символов
 
     ; === Обработка дробной части числа ===
+    pop esi
     pop eax                           ; Восстановить дробную часть из стека
     test eax, eax
     jz endFraction
@@ -276,16 +281,28 @@ writeIntegerChars:
     mov byte ptr [edi], '.'           ; Добавить символ "."
     inc edi                           ; Сдвинуть указатель
 
+performConvertFraction:
     xor edx, edx                      ; Очистить старшую часть
     mov ebx, 10                       ; Делитель для десятичной системы
 convertFractionLoop:
     xor edx, edx
-    div ebx                           ; Деление EAX на 10 (EAX = частное, EDX = остаток)
-    add dl, '0'                       ; Преобразовать остаток в ASCII
-    push edx                          ; Сохранить ASCII-символ в стеке
-    inc ecx                           ; Увеличить счётчик символов
-    test eax, eax                     ; Проверить, деление завершено
-    jnz convertFractionLoop            ; Продолжать, если частное не 0
+    div ebx                             ; Деление EAX на 10 (EAX = частное, EDX = остаток)
+    add dl, '0'                         ; Преобразовать остаток в ASCII
+    push edx                            ; Сохранить ASCII-символ в стеке
+    inc ecx                             ; Увеличить счётчик символов
+    test eax, eax                       ; Проверить, деление завершено
+    jnz convertFractionLoop             ; Продолжать, если частное не 0
+
+    test esi, esi
+    jz writeFractionChars
+    xor edx, edx
+addZerosToFractionLoop:
+    add dl, '0'
+    push edx
+    inc ecx
+    dec esi
+    test esi, esi
+    jnz addZerosToFractionLoop
 
 ; Запись дробной части в буфер
 writeFractionChars:
@@ -332,6 +349,7 @@ divideIntNumbers PROC
     ; Выход:
     ;   EDI = Целая часть
     ;   ESI = Десятичная часть (до 4 знаков после запятой)
+    ;   EAX = Число незначащих нулей
     ; Используется:
     ;   EDX = Для временного хранения остатка от деления
     ;   ECX = Счётчик итераций
@@ -342,6 +360,8 @@ divideIntNumbers PROC
     div ebx                     ; Деление EAX / EBX (целая часть в EAX, остаток в EDX)
 
     mov edi, eax                ; Сохранить целую часть
+    push edi
+    xor edi, edi
 
     ; Проверить, есть ли остаток
     test edx, edx               ; Проверить остаток
@@ -355,10 +375,23 @@ fractionLoop:
     xor edx, edx                ; Очистить регистр остатка
     div ebx                     ; Выполнить деление (EAX / EBX)
 
+    ; Если целая часть от деления остатка равна 0
+    test eax, eax
+    jnz addFraction
+    ; Если хранимая дробная часть равна 0
+    test esi, esi
+    jnz addFraction
+
+    ; Иначе увеличим число незначащих нулей
+    inc edi
+    jmp checkNewFraction
+
+addFraction:
     ; Добавить текущий разряд в десятичную часть
     imul esi, 10                ; Увеличить разрядность
     add esi, eax                ; Добавить новый разряд (даже если он 0)
 
+checkNewFraction:
     ; Проверить новый остаток
     test edx, edx               ; Если остаток стал нулевым
     jz done                     ; Прекратить обработку
@@ -367,6 +400,9 @@ fractionLoop:
     loop fractionLoop           ; Повторить цикл (максимум 4 раза)
 
 done:
+    mov eax, edi
+    pop edi
+    
     ret
 divideIntNumbers ENDP
 
